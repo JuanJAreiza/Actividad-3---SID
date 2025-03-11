@@ -12,19 +12,24 @@ public class AuthManager : MonoBehaviour
     private string authToken;
     private string username;
 
-    public TMP_InputField usernameField;
-    public TMP_InputField passwordField;
+    //Para el login register
+    public TMP_InputField usernameField, passwordField;
     public TMP_Text feedbackText;
-    public Button loginButton;
-    public Button registerButton;
+    public Button loginButton, registerButton;
 
+    //Para enviar la data
+    public Button sendScoreButton;
+    public TMP_Text feedbackSendScore;
+    
+    //Para el scoreboard
     public Button updateScoreButton;
-    public TMP_Text scoreBoardText;
-    public TMP_Text feedbackMain;
+    public TMP_Text scoreBoardText, feedbackScoreboard;
+    public ScoreManager scoreManager;
 
-    public GameObject panelAuth;
-    public GameObject panelMain;
+    //Para los paneles
+    public GameObject panelAuth, panelMain, panelProfile;
 
+    //Para no repetir tanto los colores
     private Color32 errorColor = new Color32(255, 61, 135, 255); // Color de errores
     private Color32 successColor = new Color32(37, 150, 28, 255); // Color de cosas buenas :D
 
@@ -37,10 +42,10 @@ public class AuthManager : MonoBehaviour
 
         panelAuth.SetActive(true);
         panelMain.SetActive(false);
+        panelMain.SetActive(false);
 
-        loginButton.onClick.AddListener(LoginUser);
-        registerButton.onClick.AddListener(RegisterUser);
-        updateScoreButton.onClick.AddListener(() => StartCoroutine(UpdateUserScore()));
+        updateScoreButton.onClick.AddListener(() => StartCoroutine(GetUsers()));
+        sendScoreButton.onClick.AddListener(() => StartCoroutine(SendScoreToAPI()));
     }
 
     public void RegisterUser()
@@ -50,17 +55,11 @@ public class AuthManager : MonoBehaviour
 
     private IEnumerator RegisterCoroutine()
     {
-        var credentials = new Credentials
-        {
-            username = usernameField.text,
-            password = passwordField.text
-        };
+        string path = apiUrl + "/usuarios";
+        string json = JsonUtility.ToJson(new Credentials { username = usernameField.text, password = passwordField.text });
 
-        string json = JsonUtility.ToJson(credentials);
-        UnityWebRequest request = new UnityWebRequest(apiUrl + "/usuarios", "POST");
-        byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
-        request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-        request.downloadHandler = new DownloadHandlerBuffer();
+        UnityWebRequest request = UnityWebRequest.Put(path, json);
+        request.method = "POST";
         request.SetRequestHeader("Content-Type", "application/json");
 
         yield return request.SendWebRequest();
@@ -83,17 +82,11 @@ public class AuthManager : MonoBehaviour
 
     private IEnumerator LoginCoroutine()
     {
-        var credentials = new Credentials
-        {
-            username = usernameField.text,
-            password = passwordField.text
-        };
+        string path = apiUrl + "/auth/login";
+        string json = JsonUtility.ToJson(new Credentials { username = usernameField.text, password = passwordField.text });
 
-        string json = JsonUtility.ToJson(credentials);
-        UnityWebRequest request = new UnityWebRequest(apiUrl + "/auth/login", "POST");
-        byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
-        request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-        request.downloadHandler = new DownloadHandlerBuffer();
+        UnityWebRequest request = UnityWebRequest.Put(path, json);
+        request.method = "POST";
         request.SetRequestHeader("Content-Type", "application/json");
 
         yield return request.SendWebRequest();
@@ -102,11 +95,21 @@ public class AuthManager : MonoBehaviour
         {
             AuthResponse response = JsonUtility.FromJson<AuthResponse>(request.downloadHandler.text);
             authToken = response.token;
-            PlayerPrefs.SetString("token", response.token);
-            PlayerPrefs.SetString("username", response.usuario.username);
+            username = response.usuario.username;
 
-            feedbackText.color = successColor;
-            feedbackText.text = "¡Login exitoso!";
+            PlayerPrefs.SetString("token", authToken);
+            PlayerPrefs.SetString("username", username);
+
+            Debug.Log($"[AuthManager] Login exitoso - Username: {username}, Token: {authToken}");
+
+            ProfileManager profileManager = FindObjectOfType<ProfileManager>();
+            if (profileManager != null)
+            {
+            Debug.Log($"[AuthManager] Enviando a ProfileManager - Username: {username}");
+            profileManager.LoadUserProfile(username, authToken);
+            }
+
+            SetFeedback(feedbackText, "¡Login exitoso!", successColor);
             panelAuth.SetActive(false);
             panelMain.SetActive(true);
 
@@ -139,6 +142,7 @@ public class AuthManager : MonoBehaviour
         }
     }
 
+    /*
     private IEnumerator UpdateUserScore()
     {
         string url = apiUrl + "/usuarios";
@@ -159,6 +163,7 @@ public class AuthManager : MonoBehaviour
             feedbackMain.text = "Error al actualizar puntaje";
         }
     }
+    */
 
     private IEnumerator GetUsers()
     {
@@ -172,19 +177,63 @@ public class AuthManager : MonoBehaviour
             UserList response = JsonUtility.FromJson<UserList>(request.downloadHandler.text);
             UserModel[] leaderboard = response.usuarios.OrderByDescending(u => u.data.score).Take(5).ToArray();
 
-            scoreBoardText.text = "Top 5 Jugadores:\n";
+            scoreBoardText.text = "";
             foreach (var user in leaderboard)
             {
-                scoreBoardText.text += $"{user.username} | {user.data.score}\n";
+                scoreBoardText.text += $"<b>{user.username}</b> matriculó <b>{user.data.score}</b> crédito/s\n";
             }
 
-            feedbackMain.color = successColor;
-            feedbackMain.text = "Ranking actualizado";
+            feedbackScoreboard.color = successColor;
+            feedbackScoreboard.text = "Ranking actualizado";
         }
         else
         {
-            feedbackMain.color = errorColor;
-            feedbackMain.text = "Error al obtener ranking";
+            feedbackScoreboard.color = errorColor;
+            feedbackScoreboard.text = "Error al obtener ranking";
+        }
+
+        /*
+        Debug.Log("Obteniendo ranking de usuarios...");
+        Debug.Log("Respuesta del servidor: " + request.downloadHandler.text);
+        */
+
+    }
+
+    private IEnumerator SendScoreToAPI()
+    {
+        int newScore = scoreManager.GetCurrentScore();
+        string url = apiUrl + "/usuarios";
+
+        ScoreUpdate updatedData = new ScoreUpdate
+        {
+            username = PlayerPrefs.GetString("username"),
+            data = new DataUser { score = newScore }
+        };
+
+        string json = JsonUtility.ToJson(updatedData);
+        UnityWebRequest request = new UnityWebRequest(url, "PATCH");
+        byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
+        request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+        request.downloadHandler = new DownloadHandlerBuffer();
+        request.SetRequestHeader("Content-Type", "application/json");
+        request.SetRequestHeader("x-token", authToken);
+
+        /*Debug.Log("Username: " + PlayerPrefs.GetString("username"));
+        Debug.Log("Score a enviar: " + newScore);
+        Debug.Log("URL de la petición: " + url);
+        Debug.Log("JSON enviado: " + json);*/
+
+        yield return request.SendWebRequest();
+
+        if (request.result == UnityWebRequest.Result.Success)
+        {
+            feedbackSendScore.color = successColor;
+            feedbackSendScore.text = "Puntaje actualizado";
+        }
+        else
+        {
+            feedbackSendScore.color = errorColor;
+            feedbackSendScore.text = "Error al actualizar";
         }
     }
 
@@ -196,21 +245,15 @@ public class AuthManager : MonoBehaviour
 
     private string ExtractErrorMessage(string jsonResponse)
     {
-        try
-        {
-            ErrorResponse errorResponse = JsonUtility.FromJson<ErrorResponse>(jsonResponse);
-            return errorResponse.msg; //Errores de la API
-        }
-        catch
-        {
-            return "Ocurrió un error desconocido.";
-        }
+        try { return JsonUtility.FromJson<ErrorResponse>(jsonResponse).msg; }
+        catch { return "Ocurrió un error desconocido."; }
     }
+    
+}
 
-    public class ErrorResponse
-    {
-        public string msg;
-    }
+public class ErrorResponse
+{
+    public string msg;
 }
 
 [System.Serializable]
@@ -246,4 +289,10 @@ public class UserList
 public class DataUser
 {
     public int score;
+}
+
+public class ScoreUpdate
+{
+    public string username;
+    public DataUser data;
 }
