@@ -19,7 +19,7 @@ public class ProfileManager : MonoBehaviour
     private IEnumerator GetUserProfile(string username, string token)
     {
         string url = $"{apiUrl}?username={username}";
-        //Debug.Log($"[ProfileManager] Realizando GET a: {url}");
+        //Debug.Log($"[Profile] Realizando GET a: {url}");
 
         UnityWebRequest request = UnityWebRequest.Get(url);
         request.SetRequestHeader("x-token", token);
@@ -28,7 +28,7 @@ public class ProfileManager : MonoBehaviour
 
         if (request.result == UnityWebRequest.Result.Success)
         {
-            //Debug.Log($"[ProfileManager] Respuesta JSON del perfil: {request.downloadHandler.text}");
+            //Debug.Log($"[Profile] Respuesta JSON del perfil: {request.downloadHandler.text}");
 
             UserList response = JsonUtility.FromJson<UserList>(request.downloadHandler.text);
 
@@ -48,24 +48,26 @@ public class ProfileManager : MonoBehaviour
                 if (user != null)
                 {
                     usernameText.text = $"<b>{user.username}</b>";
-                    idText.text = $"Id: <b>{user._id}</b>";
+                    idText.text = $"{user._id}";
                     stateText.text = user.estado ? "Activo" : "Inactivo";
+                    stateText.color = user.estado ? new Color32(37, 150, 28, 255) : new Color32(255, 61, 135, 255);
 
-                    //Debug.Log($"[ProfileManager] Perfil cargado correctamente: {user.username}");
+
+                    //Debug.Log($"[Profile] Perfil cargado correctamente: {user.username}");
                 }
                 else
                 {
-                    //Debug.LogError("[ProfileManager] No se encontró el usuario correcto en la lista.");
+                    //Debug.LogError("[Profile] No se encontró el usuario correcto en la lista.");
                 }
             }
             else
             {
-                //Debug.LogError("[ProfileManager] No se encontró el usuario en la base de datos.");
+                //Debug.LogError("[Profile] No se encontró el usuario en la base de datos.");
             }
         }
         else
         {
-            //Debug.LogError($"[ProfileManager] Error en la solicitud: {request.error}");
+            //Debug.LogError($"[Profile] Error en la solicitud: {request.error}");
         }
     }
 }

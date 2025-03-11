@@ -29,6 +29,9 @@ public class AuthManager : MonoBehaviour
     //Para los paneles
     public GameObject panelAuth, panelMain, panelProfile;
 
+    //Para el profile
+    public TMP_Text profileTokenText;
+
     //Para no repetir tanto los colores
     private Color32 errorColor = new Color32(255, 61, 135, 255); // Color de errores
     private Color32 successColor = new Color32(37, 150, 28, 255); // Color de cosas buenas :D
@@ -100,6 +103,8 @@ public class AuthManager : MonoBehaviour
             PlayerPrefs.SetString("token", authToken);
             PlayerPrefs.SetString("username", username);
 
+            profileTokenText.text = authToken;
+
             Debug.Log($"[AuthManager] Login exitoso - Username: {username}, Token: {authToken}");
 
             ProfileManager profileManager = FindObjectOfType<ProfileManager>();
@@ -142,29 +147,6 @@ public class AuthManager : MonoBehaviour
         }
     }
 
-    /*
-    private IEnumerator UpdateUserScore()
-    {
-        string url = apiUrl + "/usuarios";
-        UnityWebRequest request = new UnityWebRequest(url, "PATCH");
-        request.SetRequestHeader("x-token", authToken);
-        request.downloadHandler = new DownloadHandlerBuffer();
-
-        yield return request.SendWebRequest();
-
-        if (request.result == UnityWebRequest.Result.Success)
-        {
-            feedbackMain.color = successColor;
-            feedbackMain.text = "Puntaje actualizado";
-        }
-        else
-        {
-            feedbackMain.color = errorColor;
-            feedbackMain.text = "Error al actualizar puntaje";
-        }
-    }
-    */
-
     private IEnumerator GetUsers()
     {
         UnityWebRequest request = UnityWebRequest.Get(apiUrl + "/usuarios");
@@ -183,38 +165,25 @@ public class AuthManager : MonoBehaviour
                 scoreBoardText.text += $"<b>{user.username}</b> matriculó <b>{user.data.score}</b> crédito/s\n";
             }
 
-            feedbackScoreboard.color = successColor;
-            feedbackScoreboard.text = "Ranking actualizado";
+            SetFeedback(feedbackScoreboard, "Ranking actualizado", successColor);
         }
         else
         {
-            feedbackScoreboard.color = errorColor;
-            feedbackScoreboard.text = "Error al obtener ranking";
+            SetFeedback(feedbackScoreboard, "Error al obtener ranking", errorColor);
         }
-
-        /*
-        Debug.Log("Obteniendo ranking de usuarios...");
-        Debug.Log("Respuesta del servidor: " + request.downloadHandler.text);
-        */
-
     }
 
     private IEnumerator SendScoreToAPI()
     {
-        int newScore = scoreManager.GetCurrentScore();
-        string url = apiUrl + "/usuarios";
-
-        ScoreUpdate updatedData = new ScoreUpdate
+        string path = apiUrl + "/usuarios";
+        string json = JsonUtility.ToJson(new ScoreUpdate
         {
             username = PlayerPrefs.GetString("username"),
-            data = new DataUser { score = newScore }
-        };
+            data = new DataUser { score = scoreManager.GetCurrentScore() }
+        });
 
-        string json = JsonUtility.ToJson(updatedData);
-        UnityWebRequest request = new UnityWebRequest(url, "PATCH");
-        byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
-        request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-        request.downloadHandler = new DownloadHandlerBuffer();
+        UnityWebRequest request = UnityWebRequest.Put(path, json);
+        request.method = "PATCH";
         request.SetRequestHeader("Content-Type", "application/json");
         request.SetRequestHeader("x-token", authToken);
 
@@ -227,13 +196,11 @@ public class AuthManager : MonoBehaviour
 
         if (request.result == UnityWebRequest.Result.Success)
         {
-            feedbackSendScore.color = successColor;
-            feedbackSendScore.text = "Puntaje actualizado";
+            SetFeedback(feedbackSendScore, "Puntaje actualizado", successColor);
         }
         else
         {
-            feedbackSendScore.color = errorColor;
-            feedbackSendScore.text = "Error al actualizar";
+            SetFeedback(feedbackSendScore, "Error al actualizar", errorColor);
         }
     }
 
